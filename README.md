@@ -85,28 +85,13 @@ ros2 topic echo /imu --once
 ros2 topic echo /scan --once --field ranges
 ```
 
-## 5. Tuning
-
-| What | Where |
-|---|---|
-| Lidar beams / range / noise | `urdf/husky.urdf.xacro` → `<sensor name="lidar">` |
-| IMU rate / noise | `urdf/husky.urdf.xacro` → `<sensor name="imu">` (set stddev to 0 for exact values) |
-| Encoder ticks per revolution | `sensor_check` parameter `ticks_per_rev` (default 1024) |
-| Obstacle position / size | `worlds/husky_obstacle.sdf`, **and** the `obstacle_*` params of `sensor_check` |
-
-Example: if you move the box to (3, 2), run
-`ros2 run husky_sensor_sim sensor_check --ros-args -p use_sim_time:=true -p obstacle_x:=3.0 -p obstacle_y:=2.0`.
-
-Restart `sensor_check` to zero its counters.
-
-
 ## Files
 
 ```
 husky_sensor_sim/
 ├── launch/sim.launch.py          Gazebo + spawn + robot_state_publisher + bridge + RViz
 ├── urdf/husky.urdf.xacro         robot, encoders (JointStatePublisher), lidar, IMU, DiffDrive, ground truth
-├── worlds/husky_obstacle.sdf     ground plane + 1 m cube at (4, 0)
+├── worlds/husky_obstacle.sdf     ground plane + 1 m cube
 ├── rviz/husky.rviz               robot, TF, scan, odometry
 └── husky_sensor_sim/sensor_check.py   compares every sensor against ground truth
 ```
