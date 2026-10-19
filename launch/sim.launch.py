@@ -15,7 +15,7 @@ ROBOT_NAME = 'husky'
 
 def generate_launch_description():
     pkg = get_package_share_directory('husky_sensor_sim')
-    world_file = os.path.join(pkg, 'worlds', 'husky_obstacle.sdf')
+    world_file = os.path.join(pkg, 'worlds', 'husky_world.sdf')
     xacro_file = os.path.join(pkg, 'urdf', 'husky.urdf.xacro')
     rviz_file = os.path.join(pkg, 'rviz', 'husky.rviz')
 
