@@ -19,7 +19,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='marpa',
-    maintainer_email='elpapan489@gmail.com',
+    maintainer_email='mariap@gmail.com',
     description='Husky sensor verification sim for Gazebo Fortress',
     license='Apache-2.0',
     entry_points={
