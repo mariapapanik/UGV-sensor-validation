@@ -1,0 +1,65 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Reference Frame: <Fixed Frame>
+      Plane Cell Count: 20
+      Cell Size: 1
+      Color: 160; 160; 164
+    - Class: rviz_default_plugins/RobotModel
+      Name: RobotModel
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+        Durability Policy: Transient Local
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Show Names: true
+      Marker Scale: 0.5
+    - Class: rviz_default_plugins/LaserScan
+      Name: LaserScan
+      Enabled: true
+      Topic:
+        Value: /scan
+        Reliability Policy: Best Effort
+      Style: Flat Squares
+      Size (m): 0.05
+      Color Transformer: FlatColor
+      Color: 255; 40; 40
+    - Class: rviz_default_plugins/Odometry
+      Name: Encoder odometry
+      Enabled: true
+      Topic:
+        Value: /odom
+      Keep: 50
+      Shape:
+        Value: Arrow
+        Color: 50; 120; 255
+  Global Options:
+    Fixed Frame: odom
+    Background Color: 48; 48; 48
+    Frame Rate: 30
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Measure
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 9
+      Focal Point:
+        X: 2
+        Y: 0
+        Z: 0
+      Pitch: 0.9
+      Yaw: 3.6
+    Saved: ~
+Window Geometry:
+  Width: 1200
+  Height: 800
