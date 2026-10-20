@@ -359,7 +359,7 @@ def make_figure(r, path, summary_path, show):
     ax.plot(r['o_t'], np.degrees(r['o_yaw_rel']), color='orange', ls=':', lw=2, label='/odom')
     if r['has_ekf']:
         ax.plot(r['f_t'], np.degrees(r['f_yaw_rel']), color='tab:purple', ls='-.', lw=2,
-                label='EKF (encoders + IMU)')
+                label='EKF (heading from IMU)')
     shade(ax)
     ax.set_title('Heading change vs ground truth')
     ax.set_xlabel('Time (s)')
@@ -422,13 +422,14 @@ def make_figure(r, path, summary_path, show):
     ax.plot(r['o_xw'], r['o_yw'], color='orange', ls=':', lw=2, label='/odom (encoders only)')
     ax.plot(r['dr_x'], r['dr_y'], 'b--', lw=1.5, label='Encoders + IMU heading')
     if r['has_ekf']:
-        ax.plot(r['f_xw'], r['f_yw'], color='tab:purple', ls='-.', lw=2, label='EKF (encoders + IMU)')
+        ax.plot(r['f_xw'], r['f_yw'], color='tab:purple', ls='-.', lw=2,
+                label='EKF (encoder distance + IMU heading)')
     ax.scatter([r['g_x'][0]], [r['g_y'][0]], c='green', s=100, marker='o', zorder=5, label='Start')
     ax.scatter([r['g_x'][-1]], [r['g_y'][-1]], c='red', s=100, marker='x', zorder=5, label='End')
     ax.set_title('Path vs ground truth')
     ax.set_xlabel('X (m)')
     ax.set_ylabel('Y (m)')
-    ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5))
+    ax.legend(loc='upper right')
     ax.grid(True)
     ax.set_aspect('equal', adjustable='datalim')
 
