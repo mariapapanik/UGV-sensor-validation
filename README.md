@@ -96,7 +96,7 @@ Start the simulation fresh (robot at the origin), then in a second terminal:
 ros2 run husky_sensor_sim validation_run
 ```
 
-Results go to `~/husky_validation/<date_time>/`:
+Results go to `husky_validation/<date_time>/` in the folder that contains your workspace (for `~/projects/husky_ws` that is `~/projects/husky_validation/`):
 - `sensor_validation_results.png`: heading, lidar range, wheel velocities, robot velocity, path, summary
 - `summary.txt`: all metrics
 - CSV files for ground truth, odometry, IMU, encoders, lidar and phases (sim time, t = 0 at test start)
@@ -110,7 +110,7 @@ Parameters (`--ros-args -p name:=value`):
 | `second_straight` | 1.5 m (0 skips it) |
 | `settle_time` | 2.0 s |
 | `stop_range` | 0.8 m (safety stop on the forward lidar beam) |
-| `output_dir` | `~/husky_validation` |
+| `output_dir` | `husky_validation/` next to the workspace |
 | `show_plot` | true |
 
 ## Files

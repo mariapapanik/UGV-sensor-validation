@@ -14,6 +14,7 @@ from datetime import datetime
 
 import numpy as np
 import rclpy
+from ament_index_python.packages import get_package_prefix
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
@@ -61,6 +62,20 @@ def path_distance(x, y, yaw):
 
 def at(tq, t, y):
     return float(np.interp(tq, t, y))
+
+
+def default_output_dir(prefix=None):
+    """husky_validation/ next to the colcon workspace: <ws>/install/... -> <ws>/../husky_validation."""
+    try:
+        path = prefix or get_package_prefix('husky_sensor_sim')
+    except Exception:
+        path = ''
+    while path and path != os.path.dirname(path) and os.path.basename(path) != 'install':
+        path = os.path.dirname(path)
+    if os.path.basename(path) == 'install':
+        workspace = os.path.dirname(path)
+        return os.path.join(os.path.dirname(workspace), 'husky_validation')
+    return os.path.expanduser('~/husky_validation')
 
 
 def rms(a):
@@ -412,7 +427,8 @@ class ValidationRun(Node):
             'track': p('track', 0.5708).value,
             'box': (cx - sx / 2, cx + sx / 2, cy - sy / 2, cy + sy / 2),
         }
-        self.output_dir = os.path.expanduser(p('output_dir', '~/husky_validation').value)
+        # Empty = husky_validation/ next to the workspace
+        self.output_dir = os.path.expanduser(p('output_dir', '').value) or default_output_dir()
         self.show_plot = p('show_plot', True).value
 
         self.gt, self.odom, self.imu, self.enc = [], [], [], []
