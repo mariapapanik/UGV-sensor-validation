@@ -17,7 +17,8 @@ A Husky A200 in **Gazebo Fortress** on **ROS 2 Humble / Ubuntu 22.04**, with:
 ```bash
 sudo apt update
 sudo apt install ros-humble-ros-gz ros-humble-xacro ros-humble-robot-state-publisher \
-                 ros-humble-rviz2 ros-humble-teleop-twist-keyboard
+                 ros-humble-rviz2 ros-humble-teleop-twist-keyboard \
+                 python3-numpy python3-matplotlib
 ```
 
 ## 2. Build
@@ -85,13 +86,41 @@ ros2 topic echo /imu --once
 ros2 topic echo /scan --once --field ranges
 ```
 
+## 5. Automated validation run
+
+`validation_run` drives a fixed test and compares every sensor against ground truth:
+settle 2 s → straight 2.5 m → stop → turn 90° in place → stop → straight 1.5 m → stop.
+
+Start the simulation fresh (robot at the origin), then in a second terminal:
+```bash
+ros2 run husky_sensor_sim validation_run
+```
+
+Results go to `~/husky_validation/<date_time>/`:
+- `sensor_validation_results.png`: heading, lidar range, wheel velocities, robot velocity, path, summary
+- `summary.txt`: all metrics
+- CSV files for ground truth, odometry, IMU, encoders, lidar and phases (sim time, t = 0 at test start)
+
+Parameters (`--ros-args -p name:=value`):
+
+| Parameter | Default |
+|---|---|
+| `linear_speed` / `straight_distance` | 0.3 m/s / 2.5 m |
+| `angular_speed` / `turn_angle_deg` | 0.5 rad/s / 90 |
+| `second_straight` | 1.5 m (0 skips it) |
+| `settle_time` | 2.0 s |
+| `stop_range` | 0.8 m (safety stop on the forward lidar beam) |
+| `output_dir` | `~/husky_validation` |
+| `show_plot` | true |
+
 ## Files
 
 ```
 husky_sensor_sim/
 ├── launch/sim.launch.py          Gazebo + spawn + robot_state_publisher + bridge + RViz
 ├── urdf/husky.urdf.xacro         robot, encoders (JointStatePublisher), lidar, IMU, DiffDrive, ground truth
-├── worlds/husky_obstacle.sdf     ground plane + 1 m cube
+├── worlds/husky_world.sdf        ground plane + 1 m cube
 ├── rviz/husky.rviz               robot, TF, scan, odometry
-└── husky_sensor_sim/sensor_check.py   compares every sensor against ground truth
+├── husky_sensor_sim/sensor_check.py     live report: every sensor vs ground truth
+└── husky_sensor_sim/validation_run.py   automated test: records, analyses, plots, saves CSV
 ```

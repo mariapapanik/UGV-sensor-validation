@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'sensor_check = husky_sensor_sim.sensor_check:main',
+            'validation_run = husky_sensor_sim.validation_run:main',
         ],
     },
 )

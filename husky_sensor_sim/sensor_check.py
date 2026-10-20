@@ -55,7 +55,7 @@ class SensorCheck(Node):
         self.wheel_radius = self.declare_parameter('wheel_radius', 0.1651).value
         self.track = self.declare_parameter('track', 0.5708).value
         self.ticks_per_rev = self.declare_parameter('ticks_per_rev', 1024).value
-        # Must match the obstacle_box model in worlds/husky_obstacle.sdf
+        # Must match the obstacle_box model in worlds/husky_world.sdf
         cx = self.declare_parameter('obstacle_x', 4.0).value
         cy = self.declare_parameter('obstacle_y', 0.0).value
         sx = self.declare_parameter('obstacle_size_x', 1.0).value
