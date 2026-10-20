@@ -9,6 +9,7 @@ A Husky A200 in **Gazebo Fortress** on **ROS 2 Humble / Ubuntu 22.04**, with:
 | 2D lidar (360 beams, 20 m) | top plate, exactly x=0 y=0 | `/scan` | `sensor_msgs/LaserScan` |
 | IMU (100 Hz) | robot centre | `/imu` | `sensor_msgs/Imu` |
 | Ground truth | simulator | `/ground_truth/odom` | `nav_msgs/Odometry` |
+| EKF fusion (encoders + IMU) | `robot_localization` | `/odometry/filtered` | `nav_msgs/Odometry` |
 
 ---
 
@@ -18,7 +19,7 @@ A Husky A200 in **Gazebo Fortress** on **ROS 2 Humble / Ubuntu 22.04**, with:
 sudo apt update
 sudo apt install ros-humble-ros-gz ros-humble-xacro ros-humble-robot-state-publisher \
                  ros-humble-rviz2 ros-humble-teleop-twist-keyboard \
-                 python3-numpy python3-matplotlib
+                 ros-humble-robot-localization python3-numpy python3-matplotlib
 ```
 
 ## 2. Build
@@ -34,10 +35,11 @@ source install/setup.bash
 
 ## 3. Run
 
-**Terminal 1: simulation, bridge, RViz**
+**Terminal 1: simulation, bridge, EKF, RViz**
 ```bash
 ros2 launch husky_sensor_sim sim.launch.py       
 ```
+`ekf:=false` starts it without the EKF, `rviz:=false` without RViz.
 
 **Terminal 2: sensor check**
 ```bash
@@ -97,9 +99,11 @@ ros2 run husky_sensor_sim validation_run
 ```
 
 Results go to `husky_validation/<date_time>/` in the folder that contains your workspace (for `~/projects/husky_ws` that is `~/projects/husky_validation/`):
-- `sensor_validation_results.png`: heading, lidar range, wheel velocities, robot velocity, path, summary
-- `summary.txt`: all metrics
-- CSV files for ground truth, odometry, IMU, encoders, lidar and phases (sim time, t = 0 at test start)
+- `sensor_validation_results.png`: heading, lidar range, wheel velocities, robot velocity, path
+- `validation_summary.png` and `summary.txt`: all metrics
+- CSV files for ground truth, odometry, EKF, IMU, encoders, lidar and phases (sim time, t = 0 at test start)
+
+The EKF (`config/ekf.yaml`) takes forward speed from the encoders and heading and yaw rate from the IMU, because skid-steer encoders overestimate turns. Its output is drawn as an extra line in the heading and path plots.
 
 Parameters (`--ros-args -p name:=value`):
 
@@ -117,7 +121,8 @@ Parameters (`--ros-args -p name:=value`):
 
 ```
 husky_sensor_sim/
-├── launch/sim.launch.py          Gazebo + spawn + robot_state_publisher + bridge + RViz
+├── launch/sim.launch.py          Gazebo + spawn + robot_state_publisher + bridge + EKF + RViz
+├── config/ekf.yaml               robot_localization EKF: encoder speed + IMU heading
 ├── urdf/husky.urdf.xacro         robot, encoders (JointStatePublisher), lidar, IMU, DiffDrive, ground truth
 ├── worlds/husky_world.sdf        ground plane + 1 m cube
 ├── rviz/husky.rviz               robot, TF, scan, odometry

@@ -1,4 +1,4 @@
-"""Gazebo Fortress + Husky with wheel encoders, a top-centre lidar and an IMU."""
+"""Gazebo Fortress + Husky with wheel encoders, a top-centre lidar, an IMU and an EKF."""
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -18,8 +18,10 @@ def generate_launch_description():
     world_file = os.path.join(pkg, 'worlds', 'husky_world.sdf')
     xacro_file = os.path.join(pkg, 'urdf', 'husky.urdf.xacro')
     rviz_file = os.path.join(pkg, 'rviz', 'husky.rviz')
+    ekf_file = os.path.join(pkg, 'config', 'ekf.yaml')
 
     use_rviz = LaunchConfiguration('rviz')
+    use_ekf = LaunchConfiguration('ekf')
     robot_description = ParameterValue(Command(['xacro ', xacro_file]), value_type=str)
 
     gazebo = ExecuteProcess(
@@ -69,6 +71,16 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Sensor fusion: encoders + IMU -> /odometry/filtered
+    ekf = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_filter_node',
+        parameters=[ekf_file, {'use_sim_time': True}],
+        condition=IfCondition(use_ekf),
+        output='screen',
+    )
+
     rviz = Node(
         package='rviz2',
         executable='rviz2',
@@ -80,9 +92,11 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('rviz', default_value='true', description='Start RViz'),
+        DeclareLaunchArgument('ekf', default_value='true', description='Start the EKF (encoders + IMU)'),
         gazebo,
         robot_state_publisher,
         spawn,
         bridge,
+        ekf,
         rviz,
     ])

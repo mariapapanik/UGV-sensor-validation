@@ -115,14 +115,24 @@ def analyze(data, cfg):
              g_yaw_rel=g_yaw - g_yaw[0], g_dist=path_distance(g_x, g_y, g_yaw))
     gx0, gy0, gyaw0 = g_x[0], g_y[0], g_yaw[0]
 
+    def odometry_series(rows):
+        """Odometry relative to its start, placed in the world at the true start pose."""
+        od = crop(rows)
+        yaw = np.unwrap(od[:, 3])
+        dx, dy = od[:, 1] - od[0, 1], od[:, 2] - od[0, 2]
+        c0, s0 = math.cos(gyaw0 - yaw[0]), math.sin(gyaw0 - yaw[0])
+        return (od[:, 0], yaw - yaw[0], path_distance(od[:, 1], od[:, 2], yaw),
+                gx0 + c0 * dx - s0 * dy, gy0 + s0 * dx + c0 * dy)
+
     # --- DiffDrive odometry (computed by Gazebo from the wheel joints)
-    od = crop(data['odom'])
-    o_t = od[:, 0]
-    o_yaw = np.unwrap(od[:, 3])
-    ox, oy = od[:, 1] - od[0, 1], od[:, 2] - od[0, 2]
-    c0, s0 = math.cos(gyaw0 - o_yaw[0]), math.sin(gyaw0 - o_yaw[0])
-    r.update(o_t=o_t, o_yaw_rel=o_yaw - o_yaw[0], o_dist=path_distance(od[:, 1], od[:, 2], o_yaw),
-             o_xw=gx0 + c0 * ox - s0 * oy, o_yw=gy0 + s0 * ox + c0 * oy)
+    o_t, o_yaw_rel, o_dist, o_xw, o_yw = odometry_series(data['odom'])
+    r.update(o_t=o_t, o_yaw_rel=o_yaw_rel, o_dist=o_dist, o_xw=o_xw, o_yw=o_yw)
+
+    # --- EKF (robot_localization: encoder speed + IMU heading), optional
+    r['has_ekf'] = len(data.get('ekf') or []) > 1
+    if r['has_ekf']:
+        f_t, f_yaw_rel, f_dist, f_xw, f_yw = odometry_series(data['ekf'])
+        r.update(f_t=f_t, f_yaw_rel=f_yaw_rel, f_dist=f_dist, f_xw=f_xw, f_yw=f_yw)
 
     # --- IMU
     im = crop(data['imu'])
@@ -197,6 +207,8 @@ def analyze(data, cfg):
         'encoders': delta(e_t, e_dist, ps, pt),
         'odom': delta(o_t, r['o_dist'], ps, pt),
     }
+    if r['has_ekf']:
+        m['straight']['ekf'] = delta(r['f_t'], r['f_dist'], ps, pt)
     sel = (e_t >= ps) & (e_t <= p_stop1)
     m['speed_rms_err'] = rms(r['e_v'][sel] - np.interp(e_t[sel], g_t, r['g_v']))
     m['speed_mean'] = float(np.mean(r['e_v'][sel])) if sel.any() else float('nan')
@@ -208,12 +220,16 @@ def analyze(data, cfg):
         'encoders': math.degrees(delta(e_t, r['e_yaw'], pt, p_s2)),
         'odom': math.degrees(delta(o_t, r['o_yaw_rel'], pt, p_s2)),
     }
+    if r['has_ekf']:
+        m['turn']['ekf'] = math.degrees(delta(r['f_t'], r['f_yaw_rel'], pt, p_s2))
     gt_turn = m['turn']['truth']
     m['effective_track'] = (track * m['turn']['encoders'] / gt_turn) if abs(gt_turn) > 1.0 else float('nan')
 
     gxe, gye = g_x[-1], g_y[-1]
     m['final_err_odom'] = math.hypot(r['o_xw'][-1] - gxe, r['o_yw'][-1] - gye)
     m['final_err_dr'] = math.hypot(r['dr_x'][-1] - gxe, r['dr_y'][-1] - gye)
+    if r['has_ekf']:
+        m['final_err_ekf'] = math.hypot(r['f_xw'][-1] - gxe, r['f_yw'][-1] - gye)
 
     rest = i_t <= ps
     m['rest_az_mean'] = float(np.mean(r['i_az'][rest])) if rest.any() else float('nan')
@@ -239,6 +255,7 @@ def summary_text(m, cfg):
     def pct(err, ref):
         return f'{100.0 * err / ref:+.2f} %' if abs(ref) > 1e-6 else ''
 
+    has_ekf = 'ekf' in s
     lines = [
         '=== HUSKY SENSOR VALIDATION ===',
         f"Sim time {m['sim_time']:.1f} s   real-time factor {m['rtf']:.2f}",
@@ -247,6 +264,10 @@ def summary_text(m, cfg):
         f"  encoders  {s['encoders']:7.3f} m  err {s['encoders'] - s['truth']:+.3f} m"
         f"  {pct(s['encoders'] - s['truth'], s['truth'])}",
         f"  /odom     {s['odom']:7.3f} m  err {s['odom'] - s['truth']:+.3f} m",
+    ]
+    if has_ekf:
+        lines.append(f"  EKF       {s['ekf']:7.3f} m  err {s['ekf'] - s['truth']:+.3f} m")
+    lines += [
         f"  speed {m['speed_mean']:.3f} m/s, RMS err vs truth {m['speed_rms_err']:.4f} m/s",
         '',
         f"TURN       truth {t['truth']:.1f} deg",
@@ -254,11 +275,21 @@ def summary_text(m, cfg):
         f"  IMU orien {t['imu_orientation']:7.1f} deg  err {t['imu_orientation'] - t['truth']:+.2f}",
         f"  encoders  {t['encoders']:7.1f} deg  err {t['encoders'] - t['truth']:+.2f}  (skid slip)",
         f"  /odom     {t['odom']:7.1f} deg  err {t['odom'] - t['truth']:+.2f}",
+    ]
+    if has_ekf:
+        lines.append(f"  EKF       {t['ekf']:7.1f} deg  err {t['ekf'] - t['truth']:+.2f}")
+    lines += [
         f"  effective track {m['effective_track']:.3f} m (nominal {cfg['track']:.3f} m)",
         '',
         'FINAL POSITION ERROR vs truth',
         f"  /odom (encoders only)  {m['final_err_odom']:.3f} m",
         f"  encoders + IMU heading {m['final_err_dr']:.3f} m",
+    ]
+    if has_ekf:
+        lines.append(f"  EKF (encoders + IMU)   {m['final_err_ekf']:.3f} m")
+    else:
+        lines.append('  EKF: no /odometry/filtered recorded')
+    lines += [
         '',
         f"LIDAR  {ld['scans']} scans, {ld['hits']} beam hits on obstacle",
         f"  bias {ld['bias']:+.4f} m   mean|err| {ld['mae']:.4f} m",
@@ -284,6 +315,8 @@ def save_csv(data, r, out_dir):
     shift = lambda rows: [[row[0] - t0, *row[1:]] for row in rows]  # noqa: E731
     write('ground_truth.csv', shift(data['gt']), 't,x,y,yaw,v,w')
     write('odom.csv', shift(data['odom']), 't,x,y,yaw')
+    if data.get('ekf'):
+        write('ekf.csv', shift(data['ekf']), 't,x,y,yaw')
     write('imu.csv', shift(data['imu']), 't,yaw,gyro_z,accel_x,accel_y,accel_z')
     names = data['enc_names']
     write('encoders.csv', shift(data['enc']),
@@ -298,14 +331,18 @@ def save_csv(data, r, out_dir):
         f.write(r['summary'] + '\n')
 
 
-def make_figure(r, path, show):
+def make_figure(r, path, summary_path, show):
     import matplotlib
     if not show:
         matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
 
-    fig, axes = plt.subplots(3, 2, figsize=(15, 15))
+    fig = plt.figure(figsize=(15, 15))
+    grid = fig.add_gridspec(3, 2)
+    axes = {'heading': fig.add_subplot(grid[0, 0]), 'lidar': fig.add_subplot(grid[0, 1]),
+            'wheels': fig.add_subplot(grid[1, 0]), 'velocity': fig.add_subplot(grid[1, 1]),
+            'path': fig.add_subplot(grid[2, :])}
 
     def shade(ax):
         for name, color in (('straight', 'tab:green'), ('turn', 'tab:blue'), ('straight2', 'tab:green')):
@@ -314,12 +351,15 @@ def make_figure(r, path, show):
                 ax.axvspan(a, b, color=color, alpha=0.08)
 
     # 1. heading
-    ax = axes[0, 0]
+    ax = axes['heading']
     ax.plot(r['g_t'], np.degrees(r['g_yaw_rel']), 'k-', lw=2.5, label='Ground truth')
     ax.plot(r['i_t'], np.degrees(r['i_yaw_rel']), 'b-', lw=1.5, label='IMU orientation')
     ax.plot(r['i_t'], np.degrees(r['i_gyro_yaw']), 'c--', lw=1.5, label='IMU gyro integrated')
     ax.plot(r['e_t'], np.degrees(r['e_yaw']), 'r-', lw=1.5, label='Encoders')
     ax.plot(r['o_t'], np.degrees(r['o_yaw_rel']), color='orange', ls=':', lw=2, label='/odom')
+    if r['has_ekf']:
+        ax.plot(r['f_t'], np.degrees(r['f_yaw_rel']), color='tab:purple', ls='-.', lw=2,
+                label='EKF (encoders + IMU)')
     shade(ax)
     ax.set_title('Heading change vs ground truth')
     ax.set_xlabel('Time (s)')
@@ -328,7 +368,7 @@ def make_figure(r, path, show):
     ax.grid(True)
 
     # 2. lidar
-    ax = axes[0, 1]
+    ax = axes['lidar']
     ax.plot(r['s_t'], r['fwd_meas'], 'b-', lw=2, label='Forward beam (measured)')
     ax.plot(r['s_t'], r['fwd_exp'], 'r--', lw=2, label='Forward beam (expected from truth)')
     shade(ax)
@@ -345,7 +385,7 @@ def make_figure(r, path, show):
     ax.legend(h1 + h2, l1 + l2, loc='upper right')
 
     # 3. wheel velocities
-    ax = axes[1, 0]
+    ax = axes['wheels']
     colors = {'left': 'tab:blue', 'right': 'tab:red'}
     for i, name in enumerate(r['e_names']):
         side = 'left' if 'left' in name else 'right'
@@ -360,7 +400,7 @@ def make_figure(r, path, show):
     ax.grid(True)
 
     # 4. robot velocity
-    ax = axes[1, 1]
+    ax = axes['velocity']
     ax.plot(r['e_t'], r['e_v'], 'g-', lw=2, label='Linear, encoders (m/s)')
     ax.plot(r['g_t'], r['g_v'], 'k--', lw=1.2, label='Linear, truth (m/s)')
     ax.plot(r['e_t'], r['e_w'], 'm-', lw=1.5, label='Angular, encoders (rad/s)')
@@ -373,36 +413,39 @@ def make_figure(r, path, show):
     ax.legend()
     ax.grid(True)
 
-    # 5. path
-    ax = axes[2, 0]
+    # 5. path (full width)
+    ax = axes['path']
     xmin, xmax, ymin, ymax = r['cfg']['box']
     ax.add_patch(Rectangle((xmin, ymin), xmax - xmin, ymax - ymin, color='tab:red', alpha=0.4,
                            label='Obstacle'))
     ax.plot(r['g_x'], r['g_y'], 'k-', lw=2.5, label='Ground truth')
     ax.plot(r['o_xw'], r['o_yw'], color='orange', ls=':', lw=2, label='/odom (encoders only)')
     ax.plot(r['dr_x'], r['dr_y'], 'b--', lw=1.5, label='Encoders + IMU heading')
+    if r['has_ekf']:
+        ax.plot(r['f_xw'], r['f_yw'], color='tab:purple', ls='-.', lw=2, label='EKF (encoders + IMU)')
     ax.scatter([r['g_x'][0]], [r['g_y'][0]], c='green', s=100, marker='o', zorder=5, label='Start')
     ax.scatter([r['g_x'][-1]], [r['g_y'][-1]], c='red', s=100, marker='x', zorder=5, label='End')
     ax.set_title('Path vs ground truth')
     ax.set_xlabel('X (m)')
     ax.set_ylabel('Y (m)')
-    ax.legend(loc='upper left')
+    ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5))
     ax.grid(True)
-    ax.axis('equal')
-
-    # 6. summary
-    ax = axes[2, 1]
-    ax.axis('off')
-    ax.text(0.0, 1.0, r['summary'], transform=ax.transAxes, fontsize=9.5, va='top',
-            family='monospace', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-    ax.set_title('Validation summary')
+    ax.set_aspect('equal', adjustable='datalim')
 
     fig.suptitle('Husky sensor validation (green = straight, blue = turn)', fontsize=14)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
+
+    # Summary as its own image
+    lines = len(r['summary'].splitlines())
+    sfig = plt.figure(figsize=(8, 0.24 * lines + 0.6))
+    sfig.text(0.04, 0.98, r['summary'], va='top', ha='left', family='monospace', fontsize=11)
+    sfig.savefig(summary_path, dpi=150, facecolor='white', bbox_inches='tight', pad_inches=0.3)
+
     if show:
         plt.show()
     plt.close(fig)
+    plt.close(sfig)
 
 
 # ============================================================ ROS node
@@ -431,7 +474,7 @@ class ValidationRun(Node):
         self.output_dir = os.path.expanduser(p('output_dir', '').value) or default_output_dir()
         self.show_plot = p('show_plot', True).value
 
-        self.gt, self.odom, self.imu, self.enc = [], [], [], []
+        self.gt, self.odom, self.ekf, self.imu, self.enc = [], [], [], [], []
         self.enc_names = None
         self.scan_t, self.scan_ranges, self.scan_meta = [], [], None
         self.events = []
@@ -450,6 +493,8 @@ class ValidationRun(Node):
         self.cmd_pub = self.create_publisher(Twist, 'cmd_vel', 10)
         self.create_subscription(Odometry, 'ground_truth/odom', self.on_gt, 50)
         self.create_subscription(Odometry, 'odom', self.on_odom, 50)
+        # Optional: only present when the EKF is running (sim.launch.py ekf:=true)
+        self.create_subscription(Odometry, 'odometry/filtered', self.on_ekf, 50)
         self.create_subscription(Imu, 'imu', self.on_imu, qos_profile_sensor_data)
         self.create_subscription(JointState, 'joint_states', self.on_joints, 50)
         self.create_subscription(LaserScan, 'scan', self.on_scan, qos_profile_sensor_data)
@@ -480,6 +525,11 @@ class ValidationRun(Node):
         p = msg.pose.pose
         self.odom.append([self.stamp(msg.header), p.position.x, p.position.y,
                           yaw_from_quat(p.orientation)])
+
+    def on_ekf(self, msg):
+        p = msg.pose.pose
+        self.ekf.append([self.stamp(msg.header), p.position.x, p.position.y,
+                         yaw_from_quat(p.orientation)])
 
     def on_imu(self, msg):
         a, w = msg.linear_acceleration, msg.angular_velocity
@@ -589,7 +639,7 @@ class ValidationRun(Node):
             self.set_phase('done')
 
     def recorded(self):
-        return {'gt': self.gt, 'odom': self.odom, 'imu': self.imu, 'enc': self.enc,
+        return {'gt': self.gt, 'odom': self.odom, 'ekf': self.ekf, 'imu': self.imu, 'enc': self.enc,
                 'enc_names': self.enc_names, 'scan_t': self.scan_t, 'scan_ranges': self.scan_ranges,
                 'scan_meta': self.scan_meta, 'events': self.events, 'wall': self.wall}
 
@@ -600,10 +650,14 @@ class ValidationRun(Node):
         os.makedirs(out_dir, exist_ok=True)
         save_csv(data, result, out_dir)
         figure = os.path.join(out_dir, 'sensor_validation_results.png')
+        summary_image = os.path.join(out_dir, 'validation_summary.png')
+        if not self.ekf:
+            self.get_logger().warn('No /odometry/filtered received: EKF lines are left out. '
+                                   'Launch the sim with ekf:=true (the default).')
         self.get_logger().info('\n' + result['summary'])
-        self.get_logger().info(f'Saved figure, CSV files and summary to {out_dir}')
+        self.get_logger().info(f'Saved figures, CSV files and summary to {out_dir}')
         show = self.show_plot and bool(os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))
-        make_figure(result, figure, show)
+        make_figure(result, figure, summary_image, show)
 
 
 def main():
