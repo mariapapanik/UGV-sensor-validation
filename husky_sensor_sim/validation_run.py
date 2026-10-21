@@ -407,7 +407,6 @@ def make_figure(r, path, summary_path, show):
     ax.add_patch(Rectangle((xmin, ymin), xmax - xmin, ymax - ymin, color='tab:red', alpha=0.4,
                            label='Obstacle'))
     ax.plot(r['g_x'], r['g_y'], 'k-', lw=2.5, label='Ground truth')
-    ax.plot(r['o_xw'], r['o_yw'], color='orange', ls=':', lw=2, label='/odom (encoders only)')
     ax.plot(r['dr_x'], r['dr_y'], 'b--', lw=1.5, label='Encoders + IMU heading')
     if r['has_ekf']:
         ax.plot(r['f_xw'], r['f_yw'], color='tab:purple', ls='-.', lw=2,
