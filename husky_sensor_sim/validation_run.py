@@ -173,11 +173,15 @@ def analyze(data, cfg):
     i0 = int(round(-meta['angle_min'] / meta['angle_increment']))
     rmin, rmax = meta['range_min'], meta['range_max']
     fwd_meas, fwd_exp, scan_mae, errors = [], [], [], []
+    hit_x, hit_y = [], []   # every measured hit, placed in the world with the true pose
     missed = unexpected = 0
     for ts, ranges in zip(s_t, scans):
         x, y, yaw = at(ts, g_t, g_x), at(ts, g_t, g_y), at(ts, g_t, g_yaw)
-        expected = ray_box(x, y, yaw + beam_offsets, box)
+        beams = yaw + beam_offsets
+        expected = ray_box(x, y, beams, box)
         meas_ok = np.isfinite(ranges) & (ranges >= rmin) & (ranges <= rmax)
+        hit_x.append(x + ranges[meas_ok] * np.cos(beams[meas_ok]))
+        hit_y.append(y + ranges[meas_ok] * np.sin(beams[meas_ok]))
         exp_ok = (expected >= rmin) & (expected <= rmax)
         both = meas_ok & exp_ok
         err = ranges[both] - expected[both]
@@ -191,7 +195,9 @@ def analyze(data, cfg):
     fwd_meas, fwd_exp = np.array(fwd_meas), np.array(fwd_exp)
     fwd_err = fwd_meas - fwd_exp
     fwd_err = fwd_err[np.isfinite(fwd_err)]
-    r.update(s_t=s_t, fwd_meas=fwd_meas, fwd_exp=fwd_exp, scan_mae=np.array(scan_mae))
+    r.update(s_t=s_t, fwd_meas=fwd_meas, fwd_exp=fwd_exp, scan_mae=np.array(scan_mae),
+             hit_x=np.concatenate(hit_x) if hit_x else np.array([]),
+             hit_y=np.concatenate(hit_y) if hit_y else np.array([]))
 
     # --- metrics
     m = {}
@@ -367,22 +373,20 @@ def make_figure(r, path, summary_path, show):
     ax.legend()
     ax.grid(True)
 
-    # 2. lidar
+    # 2. lidar hits on the map: correct ranges land exactly on the box outline
     ax = axes['lidar']
-    ax.plot(r['s_t'], r['fwd_meas'], 'b-', lw=2, label='Forward beam (measured)')
-    ax.plot(r['s_t'], r['fwd_exp'], 'r--', lw=2, label='Forward beam (expected from truth)')
-    shade(ax)
-    ax.set_title('Lidar range to obstacle')
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Range (m)')
+    xmin, xmax, ymin, ymax = r['cfg']['box']
+    ax.add_patch(Rectangle((xmin, ymin), xmax - xmin, ymax - ymin, fill=False, ec='tab:red', lw=2,
+                           label='Obstacle (true outline)'))
+    ax.scatter(r['hit_x'], r['hit_y'], s=2, c='tab:blue', alpha=0.3, linewidths=0,
+               label=f'Lidar hits ({r["hit_x"].size}, placed with true pose)')
+    ax.plot(r['g_x'], r['g_y'], 'k-', lw=2, label='Ground truth path')
+    ax.set_title('Lidar hits on the map')
+    ax.set_xlabel('X (m)')
+    ax.set_ylabel('Y (m)')
+    ax.set_aspect('equal', adjustable='datalim')
+    ax.legend(loc='upper left', markerscale=6)
     ax.grid(True)
-    ax2 = ax.twinx()
-    ax2.plot(r['s_t'], r['scan_mae'] * 100.0, color='tab:orange', lw=1, alpha=0.8,
-             label='All obstacle beams mean |err|')
-    ax2.set_ylabel('Mean |error| (cm)', color='tab:orange')
-    h1, l1 = ax.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-    ax.legend(h1 + h2, l1 + l2, loc='upper right')
 
     # 3. wheel velocities
     ax = axes['wheels']

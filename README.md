@@ -99,7 +99,7 @@ ros2 run husky_sensor_sim validation_run
 ```
 
 Results go to `husky_validation/<date_time>/` in the folder that contains your workspace (for `~/projects/husky_ws` that is `~/projects/husky_validation/`):
-- `sensor_validation_results.png`: heading, lidar range, wheel velocities, robot velocity, path
+- `sensor_validation_results.png`: heading, lidar hits on the map (every hit placed with the true pose; correct ranges land on the box outline), wheel velocities, robot velocity, path
 - `validation_summary.png` and `summary.txt`: all metrics
 - CSV files for ground truth, odometry, EKF, IMU, encoders, lidar and phases (sim time, t = 0 at test start)
 
