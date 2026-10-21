@@ -344,11 +344,9 @@ def make_figure(r, path, summary_path, show):
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
 
-    fig = plt.figure(figsize=(15, 15))
-    grid = fig.add_gridspec(3, 2)
-    axes = {'heading': fig.add_subplot(grid[0, 0]), 'lidar': fig.add_subplot(grid[0, 1]),
-            'wheels': fig.add_subplot(grid[1, 0]), 'velocity': fig.add_subplot(grid[1, 1]),
-            'path': fig.add_subplot(grid[2, :])}
+    # Time plots on top, maps below
+    fig, ((ax_heading, ax_wheels), (ax_lidar, ax_path)) = plt.subplots(2, 2, figsize=(15, 10))
+    axes = {'heading': ax_heading, 'wheels': ax_wheels, 'lidar': ax_lidar, 'path': ax_path}
 
     def shade(ax):
         for name, color in (('straight', 'tab:green'), ('turn', 'tab:blue'), ('straight2', 'tab:green')):
@@ -403,21 +401,7 @@ def make_figure(r, path, summary_path, show):
     ax.legend()
     ax.grid(True)
 
-    # 4. robot velocity
-    ax = axes['velocity']
-    ax.plot(r['e_t'], r['e_v'], 'g-', lw=2, label='Linear, encoders (m/s)')
-    ax.plot(r['g_t'], r['g_v'], 'k--', lw=1.2, label='Linear, truth (m/s)')
-    ax.plot(r['e_t'], r['e_w'], 'm-', lw=1.5, label='Angular, encoders (rad/s)')
-    ax.plot(r['i_t'], r['i_wz'], 'c-', lw=0.8, alpha=0.6, label='Angular, IMU gyro (rad/s)')
-    ax.plot(r['g_t'], r['g_w'], 'k:', lw=1.5, label='Angular, truth (rad/s)')
-    shade(ax)
-    ax.set_title('Robot velocity: encoders and IMU vs truth')
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Velocity')
-    ax.legend()
-    ax.grid(True)
-
-    # 5. path (full width)
+    # 4. path
     ax = axes['path']
     xmin, xmax, ymin, ymax = r['cfg']['box']
     ax.add_patch(Rectangle((xmin, ymin), xmax - xmin, ymax - ymin, color='tab:red', alpha=0.4,
@@ -433,13 +417,13 @@ def make_figure(r, path, summary_path, show):
     ax.set_title('Path vs ground truth')
     ax.set_xlabel('X (m)')
     ax.set_ylabel('Y (m)')
-    ax.legend(loc='upper right')
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=3)   # below, never over the path
     ax.grid(True)
     ax.set_aspect('equal', adjustable='datalim')
 
     fig.suptitle('Husky sensor validation (green = straight, blue = turn)', fontsize=14)
     fig.tight_layout()
-    fig.savefig(path, dpi=150)
+    fig.savefig(path, dpi=150, bbox_inches='tight')
 
     # Summary as its own image
     lines = len(r['summary'].splitlines())
