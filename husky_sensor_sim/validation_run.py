@@ -361,9 +361,7 @@ def make_figure(r, path, summary_path, show):
     ax.plot(r['i_t'], np.degrees(r['i_gyro_yaw']), 'c--', lw=1.5, label='IMU gyro integrated')
     ax.plot(r['e_t'], np.degrees(r['e_yaw']), 'r-', lw=1.5, label='Encoders')
     ax.plot(r['o_t'], np.degrees(r['o_yaw_rel']), color='orange', ls=':', lw=2, label='/odom')
-    if r['has_ekf']:
-        ax.plot(r['f_t'], np.degrees(r['f_yaw_rel']), color='tab:purple', ls='-.', lw=2,
-                label='EKF (heading from IMU)')
+    # No EKF line here: its heading comes only from the IMU, so it would just repeat it
     shade(ax)
     ax.set_title('Heading change vs ground truth')
     ax.set_xlabel('Time (s)')
